@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Car {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String     @db.VarChar(150)
+  manufacturer String     @db.VarChar(100)
+  year         Int
+  price        BigInt
+  description  String?
+  images       CarImage[]
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([manufacturer])
+  @@index([year])
+  @@map("cars")
+}
+
+model CarImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  carId     String   @map("car_id") @db.Uuid
+  filename  String   @db.VarChar(255)
+  url       String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@index([carId])
+  @@map("car_images")
+}

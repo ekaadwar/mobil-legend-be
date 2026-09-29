@@ -1,0 +1,106 @@
+{
+  "info": {
+    "_postman_id": "6c496e77-229a-46ec-a293-1030bce8d7e3",
+    "name": "Mobil Legend API",
+    "description": "Koleksi API katalog mobil bekas Mobil Legend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "carId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "auth": { "type": "noauth" },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Login berhasil', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.accessToken);"
+            ] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cars",
+      "item": [
+        {
+          "name": "Get Cars",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cars?page=1&perpage=10&name=toyota&start_year=2018&end_year=2026",
+              "host": ["{{baseUrl}}"], "path": ["cars"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "perpage", "value": "10" },
+                { "key": "name", "value": "toyota", "disabled": true },
+                { "key": "start_year", "value": "2018", "disabled": true },
+                { "key": "end_year", "value": "2026", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Car Detail",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] } }
+        },
+        {
+          "name": "Add Cars",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Mobil dibuat', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "if (body[0]) pm.collectionVariables.set('carId', body[0].id);"
+            ] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "cars", "value": "[{\"name\":\"Avanza Veloz\",\"manufacturer\":\"Toyota\",\"year\":2022,\"price\":275000000,\"description\":\"Kondisi terawat\"}]", "type": "text" },
+              { "key": "images_0", "type": "file", "src": [], "disabled": true }
+            ] },
+            "url": { "raw": "{{baseUrl}}/cars/bulk", "host": ["{{baseUrl}}"], "path": ["cars", "bulk"] }
+          }
+        },
+        {
+          "name": "Update Car",
+          "request": {
+            "method": "PATCH", "header": [],
+            "body": { "mode": "formdata", "formdata": [
+              { "key": "name", "value": "Avanza Veloz Q", "type": "text" },
+              { "key": "price", "value": "290000000", "type": "text" },
+              { "key": "removeImageIds", "value": "[]", "type": "text" },
+              { "key": "images", "type": "file", "src": [], "disabled": true }
+            ] },
+            "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] }
+          }
+        },
+        {
+          "name": "Delete Car",
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] } }
+        }
+      ]
+    }
+  ]
+}
