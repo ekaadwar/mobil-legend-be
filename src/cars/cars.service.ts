@@ -13,6 +13,7 @@ import {
   CreateCarDto,
   UpdateCarDto,
 } from './dto/car.dto';
+import { Prisma } from '@prisma/client';
 
 interface CarImageRecord {
   id: string;
@@ -43,7 +44,7 @@ export class CarsService {
       throw new BadRequestException('start_year tidak boleh melebihi end_year');
     }
 
-    const where = {
+    const where: Prisma.CarWhereInput  = {
       ...(query.name && {
         OR: [
           { name: { contains: query.name, mode: 'insensitive' } },
@@ -54,7 +55,7 @@ export class CarsService {
         year: { gte: query.start_year, lte: query.end_year },
       }),
     };
-    const [cars, total]: [CarWithImages[], number] = await this.prisma.$transaction([
+    const [cars, total] = await this.prisma.$transaction([
       this.prisma.car.findMany({
         where,
         include: { images: true },
@@ -84,7 +85,7 @@ export class CarsService {
   ): Promise<CarResponseDto[]> {
     const groupedFiles = this.groupBulkFiles(inputs.length, files);
     try {
-      const cars = await this.prisma.$transaction(async (transaction: PrismaService) => {
+      const cars = await this.prisma.$transaction(async (transaction) => {
         const created: CarWithImages[] = [];
         for (const [index, input] of inputs.entries()) {
           created.push(

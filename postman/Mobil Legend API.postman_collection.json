@@ -20,20 +20,40 @@
       "item": [
         {
           "name": "Login",
-          "auth": { "type": "noauth" },
-          "event": [{
-            "listen": "test",
-            "script": { "exec": [
-              "pm.test('Login berhasil', () => pm.response.to.have.status(200));",
-              "const body = pm.response.json();",
-              "pm.collectionVariables.set('accessToken', body.accessToken);"
-            ] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login berhasil', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
           }
         }
       ]
@@ -61,7 +81,15 @@
         },
         {
           "name": "Get Car Detail",
-          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] } }
+          "request": { 
+            "method": "GET", 
+            "header": [], 
+            "url": { 
+              "raw": "{{baseUrl}}/cars/{{carId}}", 
+              "host": ["{{baseUrl}}"], 
+              "path": ["cars", "{{carId}}"] 
+            } 
+          }
         },
         {
           "name": "Add Cars",
@@ -98,7 +126,15 @@
         },
         {
           "name": "Delete Car",
-          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] } }
+          "request": { 
+            "method": "DELETE", 
+            "header": [], 
+            "url": { 
+              "raw": "{{baseUrl}}/cars/{{carId}}", 
+              "host": ["{{baseUrl}}"], 
+              "path": ["cars", "{{carId}}"] 
+            } 
+          }
         }
       ]
     }
