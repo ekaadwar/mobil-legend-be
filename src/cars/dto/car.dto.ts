@@ -1,18 +1,33 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ApiHideProperty, ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsDateString,
+  IsEmpty,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Length,
   Max,
+  Matches,
   Min,
   MinLength,
 } from 'class-validator';
 
 const currentYear = new Date().getFullYear() + 1;
+
+export enum CarStatus {
+  READY = 'ready',
+  PENDING = 'pending',
+  RESERVE = 'reserve',
+  SOLD = 'sold',
+}
+
+function nullableValue(value: unknown): unknown {
+  return value === '' || value === 'null' ? null : value;
+}
 
 export class CreateCarDto {
   @ApiProperty({ example: 'Avanza Veloz' })
@@ -45,9 +60,73 @@ export class CreateCarDto {
   @IsString()
   @MinLength(1)
   description?: string | null;
+
+  @ApiPropertyOptional({ enum: CarStatus, nullable: true, example: 'ready' })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsEnum(CarStatus)
+  status?: CarStatus | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Automatic', maxLength: 100 })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsString()
+  @Length(1, 100)
+  transmission?: string | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, example: 45000, minimum: 0, maximum: 2147483647, description: 'Jarak tempuh dalam kilometer (bilangan bulat)' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    const normalized = nullableValue(value);
+    return typeof normalized === 'string' ? Number(normalized) : normalized;
+  })
+  @IsInt()
+  @Min(0)
+  @Max(2147483647)
+  mileage?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Bensin', maxLength: 100 })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsString()
+  @Length(1, 100)
+  fuel?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'B 1234 ABC', maxLength: 30 })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsString()
+  @Length(1, 30)
+  registration_number?: string | null;
+
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true, example: '2027-10-07' })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  validity_period?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Mobil Legend Jakarta', maxLength: 150 })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsString()
+  @Length(1, 150)
+  showroom_name?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Jl. Sudirman No. 10, Jakarta' })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
+  @IsString()
+  @MinLength(1)
+  showroom_address?: string | null;
 }
 
 export class UpdateCarDto extends PartialType(CreateCarDto) {
+  @ApiHideProperty()
+  @Transform(({ value }) => value === '' ? undefined : value)
+  @IsEmpty({ message: 'images harus berupa file upload, bukan teks' })
+  images?: string;
+
   @ApiPropertyOptional({
     type: [String],
     format: 'uuid',
@@ -57,6 +136,7 @@ export class UpdateCarDto extends PartialType(CreateCarDto) {
   @Transform(({ value }) => {
     if (Array.isArray(value)) return value;
     if (typeof value !== 'string') return value;
+    if (value.trim() === '') return [];
     try {
       return JSON.parse(value) as unknown;
     } catch {
@@ -69,20 +149,20 @@ export class UpdateCarDto extends PartialType(CreateCarDto) {
 }
 
 export class CarsQueryDto {
-  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @ApiPropertyOptional({ type: 'integer', default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page = 1;
+  page: number = 1;
 
-  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ type: 'integer', default: 10, minimum: 1, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  perpage = 10;
+  perpage: number = 10;
 
   @ApiPropertyOptional({ description: 'Cari nama mobil atau pabrikan' })
   @IsOptional()
@@ -115,7 +195,7 @@ export class CarImageDto {
   url!: string;
 }
 
-export class CarResponseDto {
+export class CarListResponseDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
@@ -136,11 +216,37 @@ export class CarResponseDto {
 
   @ApiProperty({ type: [CarImageDto] })
   images!: CarImageDto[];
+
+  @ApiProperty({ enum: CarStatus, nullable: true })
+  status!: CarStatus | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  transmission!: string | null;
+
+  @ApiProperty({ type: Number, nullable: true, description: 'Jarak tempuh dalam kilometer' })
+  mileage!: number | null;
+
+  @ApiProperty({ type: String, format: 'date', nullable: true })
+  validity_period!: string | null;
+}
+
+export class CarResponseDto extends CarListResponseDto {
+  @ApiProperty({ type: String, nullable: true })
+  fuel!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  registration_number!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  showroom_name!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  showroom_address!: string | null;
 }
 
 export class CarsPageDto {
-  @ApiProperty({ type: [CarResponseDto] })
-  data!: CarResponseDto[];
+  @ApiProperty({ type: [CarListResponseDto] })
+  data!: CarListResponseDto[];
 
   @ApiProperty()
   page!: number;
@@ -159,7 +265,7 @@ export class BulkCarsFormDto {
   @ApiProperty({
     type: String,
     example:
-      '[{"name":"Avanza Veloz","manufacturer":"Toyota","year":2022,"price":275000000}]',
+      '[{"name":"Avanza Veloz","manufacturer":"Toyota","year":2022,"price":275000000,"status":"ready","transmission":"Automatic","mileage":45000,"fuel":"Bensin","registration_number":"B 1234 ABC","validity_period":"2027-10-07","showroom_name":"Mobil Legend Jakarta","showroom_address":"Jl. Sudirman No. 10, Jakarta"}]',
     description: 'Array JSON data mobil, maksimal 20 item',
   })
   @IsString()

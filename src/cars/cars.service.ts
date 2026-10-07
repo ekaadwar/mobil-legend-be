@@ -7,7 +7,9 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  CarListResponseDto,
   CarResponseDto,
+  CarStatus,
   CarsPageDto,
   CarsQueryDto,
   CreateCarDto,
@@ -28,6 +30,14 @@ interface CarWithImages {
   year: number;
   price: bigint;
   description: string | null;
+  status: string | null;
+  transmission: string | null;
+  mileage: number | null;
+  fuel: string | null;
+  registrationNumber: string | null;
+  validityPeriod: Date | null;
+  showroomName: string | null;
+  showroomAddress: string | null;
   images: CarImageRecord[];
 }
 
@@ -67,7 +77,7 @@ export class CarsService {
     ]);
 
     return {
-      data: cars.map((car) => this.serialize(car)),
+      data: cars.map((car) => this.serializeList(car)),
       page: query.page,
       perpage: query.perpage,
       total,
@@ -91,8 +101,12 @@ export class CarsService {
           created.push(
             await transaction.car.create({
               data: {
-                ...input,
+                name: input.name,
+                manufacturer: input.manufacturer,
+                year: input.year,
                 price: BigInt(input.price),
+                description: input.description,
+                ...this.additionalData(input),
                 images: {
                   create: groupedFiles[index].map((file) => this.imageData(file)),
                 },
@@ -131,13 +145,16 @@ export class CarsService {
       throw new BadRequestException('Setiap mobil maksimal memiliki 5 gambar');
     }
 
-    const { removeImageIds: _removeImageIds, ...changes } = input;
     try {
       const car = await this.prisma.car.update({
         where: { id },
         data: {
-          ...changes,
-          ...(changes.price !== undefined && { price: BigInt(changes.price) }),
+          name: input.name,
+          manufacturer: input.manufacturer,
+          year: input.year,
+          description: input.description,
+          ...(input.price !== undefined && { price: BigInt(input.price) }),
+          ...this.additionalData(input),
           images: {
             deleteMany: { id: { in: [...removeIds] } },
             create: files.map((file) => this.imageData(file)),
@@ -194,7 +211,32 @@ export class CarsService {
     return { filename: file.filename, url: `/uploads/${file.filename}` };
   }
 
+  private additionalData(input: UpdateCarDto) {
+    return {
+      status: input.status,
+      transmission: input.transmission,
+      mileage: input.mileage,
+      fuel: input.fuel,
+      registrationNumber: input.registration_number,
+      validityPeriod: input.validity_period == null
+        ? input.validity_period
+        : new Date(`${input.validity_period}T00:00:00.000Z`),
+      showroomName: input.showroom_name,
+      showroomAddress: input.showroom_address,
+    };
+  }
+
   private serialize(car: CarWithImages): CarResponseDto {
+    return {
+      ...this.serializeList(car),
+      fuel: car.fuel,
+      registration_number: car.registrationNumber,
+      showroom_name: car.showroomName,
+      showroom_address: car.showroomAddress,
+    };
+  }
+
+  private serializeList(car: CarWithImages): CarListResponseDto {
     return {
       id: car.id,
       name: car.name,
@@ -202,6 +244,10 @@ export class CarsService {
       year: car.year,
       price: Number(car.price),
       description: car.description,
+      status: car.status as CarStatus | null,
+      transmission: car.transmission,
+      mileage: car.mileage,
+      validity_period: car.validityPeriod?.toISOString().slice(0, 10) ?? null,
       images: car.images.map(({ id, url }) => ({ id, url })),
     };
   }

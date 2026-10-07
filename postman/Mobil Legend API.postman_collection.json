@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6c496e77-229a-46ec-a293-1030bce8d7e3",
     "name": "Mobil Legend API",
-    "description": "Koleksi API katalog mobil bekas Mobil Legend.",
+    "description": "Koleksi API katalog mobil bekas Mobil Legend. Field status, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address bersifat opsional dan nullable. Status: ready, pending, reserve, sold. Mileage: integer kilometer 0-2147483647. Validity_period: tanggal YYYY-MM-DD. Bulk menerima null JSON; PATCH form-data menerima teks null atau string kosong untuk mengosongkan field. Field yang tidak dikirim pada PATCH tidak berubah.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -63,7 +63,20 @@
       "item": [
         {
           "name": "Get Cars",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Daftar mobil berhasil', () => pm.response.to.have.status(200));",
+              "pm.test('Response daftar memiliki field tambahan', () => {",
+              "  pm.response.json().data.forEach(car => {",
+              "    ['status', 'transmission', 'mileage', 'validity_period'].forEach(field => pm.expect(car).to.have.property(field));",
+              "    ['fuel', 'registration_number', 'showroom_name', 'showroom_address'].forEach(field => pm.expect(car).not.to.have.property(field));",
+              "  });",
+              "});"
+            ] }
+          }],
           "request": {
+            "description": "Response pagination tetap memiliki data, page, perpage, total, totalPages. Setiap mobil menambahkan status, transmission, mileage (km), validity_period (YYYY-MM-DD); semua dapat bernilai null. Field fuel, registration_number, showroom_name, showroom_address hanya tersedia pada detail dan response tulis.",
             "method": "GET",
             "header": [],
             "url": {
@@ -81,7 +94,18 @@
         },
         {
           "name": "Get Car Detail",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Detail mobil berhasil', () => pm.response.to.have.status(200));",
+              "pm.test('Response detail memiliki delapan field tambahan', () => {",
+              "  const car = pm.response.json();",
+              "  ['status', 'transmission', 'mileage', 'fuel', 'registration_number', 'validity_period', 'showroom_name', 'showroom_address'].forEach(field => pm.expect(car).to.have.property(field));",
+              "});"
+            ] }
+          }],
           "request": { 
+            "description": "Response detail menambahkan status, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address. Semua nullable. Tanggal berformat YYYY-MM-DD, mileage dalam kilometer.",
             "method": "GET", 
             "header": [], 
             "url": { 
@@ -102,10 +126,11 @@
             ] }
           }],
           "request": {
+            "description": "Field cars adalah string array JSON berisi 1-20 mobil. Semua delapan field tambahan opsional dan menerima null; jika tidak diisi disimpan null, termasuk status (tanpa default). Status: ready|pending|reserve|sold. Mileage integer 0-2147483647 km. Validity_period YYYY-MM-DD. Batas panjang: transmission/fuel 100, registration_number 30, showroom_name 150 karakter. Response berisi array detail mobil termasuk semua field tambahan.",
             "method": "POST",
             "header": [],
             "body": { "mode": "formdata", "formdata": [
-              { "key": "cars", "value": "[{\"name\":\"Avanza Veloz\",\"manufacturer\":\"Toyota\",\"year\":2022,\"price\":275000000,\"description\":\"Kondisi terawat\"}]", "type": "text" },
+              { "key": "cars", "value": "[{\"name\":\"Avanza Veloz\",\"manufacturer\":\"Toyota\",\"year\":2022,\"price\":275000000,\"description\":\"Kondisi terawat\",\"status\":\"ready\",\"transmission\":\"Automatic\",\"mileage\":45000,\"fuel\":\"Bensin\",\"registration_number\":\"B 1234 ABC\",\"validity_period\":\"2027-10-07\",\"showroom_name\":\"Mobil Legend Jakarta\",\"showroom_address\":\"Jl. Sudirman No. 10, Jakarta\"}]", "type": "text" },
               { "key": "images_0", "type": "file", "src": [], "disabled": true }
             ] },
             "url": { "raw": "{{baseUrl}}/cars/bulk", "host": ["{{baseUrl}}"], "path": ["cars", "bulk"] }
@@ -114,11 +139,20 @@
         {
           "name": "Update Car",
           "request": {
+            "description": "Semua field opsional. Delapan field tambahan menerima teks null atau string kosong untuk menghapus nilainya; nonaktifkan/hilangkan field agar nilainya tidak berubah. Status ready|pending|reserve|sold; mileage integer 0-2147483647 km; validity_period YYYY-MM-DD. Response adalah detail mobil termasuk semua field tambahan.",
             "method": "PATCH", "header": [],
             "body": { "mode": "formdata", "formdata": [
               { "key": "name", "value": "Avanza Veloz Q", "type": "text" },
               { "key": "price", "value": "290000000", "type": "text" },
-              { "key": "removeImageIds", "value": "[]", "type": "text" },
+              { "key": "status", "value": "pending", "type": "text" },
+              { "key": "transmission", "value": "Automatic", "type": "text" },
+              { "key": "mileage", "value": "46000", "type": "text" },
+              { "key": "fuel", "value": "Bensin", "type": "text" },
+              { "key": "registration_number", "value": "B 1234 ABC", "type": "text" },
+              { "key": "validity_period", "value": "2028-10-07", "type": "text" },
+              { "key": "showroom_name", "value": "Mobil Legend Jakarta", "type": "text" },
+              { "key": "showroom_address", "value": "Jl. Sudirman No. 10, Jakarta", "type": "text" },
+              { "key": "removeImageIds", "value": "[]", "type": "text", "disabled": true, "description": "Aktifkan hanya untuk menghapus gambar dan isi array JSON UUID. Tidak dikirim, kosong, atau [] berarti tidak menghapus gambar lama." },
               { "key": "images", "type": "file", "src": [], "disabled": true }
             ] },
             "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] }

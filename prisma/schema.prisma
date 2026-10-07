@@ -16,6 +16,14 @@ model Car {
   year         Int
   price        BigInt
   description  String?
+  status       String?    @db.VarChar(10)
+  transmission String?    @db.VarChar(100)
+  mileage      Int?
+  fuel         String?    @db.VarChar(100)
+  registrationNumber String? @map("registration_number") @db.VarChar(30)
+  validityPeriod DateTime? @map("validity_period") @db.Date
+  showroomName String?    @map("showroom_name") @db.VarChar(150)
+  showroomAddress String? @map("showroom_address") @db.Text
   images       CarImage[]
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
