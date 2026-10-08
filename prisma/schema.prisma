@@ -20,6 +20,7 @@ model Car {
   transmission String?    @db.VarChar(100)
   mileage      Int?
   fuel         String?    @db.VarChar(100)
+  color        String?    @db.VarChar(100)
   registrationNumber String? @map("registration_number") @db.VarChar(30)
   validityPeriod DateTime? @map("validity_period") @db.Date
   showroomName String?    @map("showroom_name") @db.VarChar(150)

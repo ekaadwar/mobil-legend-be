@@ -29,6 +29,7 @@ interface CarWithImages {
   manufacturer: string;
   year: number;
   price: bigint;
+  color: string | null;
   description: string | null;
   status: string | null;
   transmission: string | null;
@@ -214,6 +215,7 @@ export class CarsService {
   private additionalData(input: UpdateCarDto) {
     return {
       status: input.status,
+      color: input.color,
       transmission: input.transmission,
       mileage: input.mileage,
       fuel: input.fuel,
@@ -245,6 +247,7 @@ export class CarsService {
       price: Number(car.price),
       description: car.description,
       status: car.status as CarStatus | null,
+      color: car.color,
       transmission: car.transmission,
       mileage: car.mileage,
       validity_period: car.validityPeriod?.toISOString().slice(0, 10) ?? null,

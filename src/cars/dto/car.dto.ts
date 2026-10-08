@@ -54,6 +54,11 @@ export class CreateCarDto {
   @Max(Number.MAX_SAFE_INTEGER)
   price!: number;
 
+  @ApiProperty({ example: 'Silver Metallic' })
+  @IsString()
+  @Length(1, 100)
+  color?: string;
+
   @ApiPropertyOptional({ example: 'Kondisi terawat, servis rutin.' })
   @IsOptional()
   @Transform(({ value }) => (value === '' || value === 'null' ? null : value))
@@ -219,6 +224,9 @@ export class CarListResponseDto {
 
   @ApiProperty({ enum: CarStatus, nullable: true })
   status!: CarStatus | null;
+
+  @ApiProperty({type:String, nullable:true})
+  color!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
   transmission!: string | null;

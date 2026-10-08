@@ -73,7 +73,7 @@ export class CarsController {
           type: 'string',
           description: 'Array JSON data mobil (1-20 item). Delapan field tambahan opsional dan nullable; validity_period berformat YYYY-MM-DD, mileage kilometer bulat nonnegatif.',
           example:
-            '[{"name":"Avanza Veloz","manufacturer":"Toyota","year":2022,"price":275000000,"status":"ready","transmission":"Automatic","mileage":45000,"fuel":"Bensin","registration_number":"B 1234 ABC","validity_period":"2027-10-07","showroom_name":"Mobil Legend Jakarta","showroom_address":"Jl. Sudirman No. 10, Jakarta"}]',
+            '[{"name":"Avanza Veloz","manufacturer":"Toyota","year":2022,"price":275000000,"status":"ready","color":"Silver Metallic","transmission":"Automatic","mileage":45000,"fuel":"Bensin","registration_number":"B 1234 ABC","validity_period":"2027-10-07","showroom_name":"Mobil Legend Jakarta","showroom_address":"Jl. Sudirman No. 10, Jakarta"}]',
         },
         images_0: {
           type: 'array',
@@ -117,6 +117,7 @@ export class CarsController {
         manufacturer: { type: 'string', example: 'Toyota' },
         year: { type: 'integer', example: 2023 },
         price: { type: 'integer', example: 290000000 },
+        color:{type: 'string', example:'Silver Metallic'},
         description: { type: 'string', nullable: true },
         status: { type: 'string', enum: Object.values(CarStatus), nullable: true, example: 'pending' },
         transmission: { type: 'string', maxLength: 100, nullable: true, example: 'Automatic' },
