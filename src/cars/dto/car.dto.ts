@@ -54,12 +54,14 @@ export class CreateCarDto {
   @Max(Number.MAX_SAFE_INTEGER)
   price!: number;
 
-  @ApiProperty({ example: 'Silver Metallic' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100, example: 'Silver Metallic' })
+  @IsOptional()
+  @Transform(({ value }) => nullableValue(value))
   @IsString()
   @Length(1, 100)
-  color?: string;
+  color?: string | null;
 
-  @ApiPropertyOptional({ example: 'Kondisi terawat, servis rutin.' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Kondisi terawat, servis rutin.' })
   @IsOptional()
   @Transform(({ value }) => (value === '' || value === 'null' ? null : value))
   @IsString()
@@ -198,6 +200,9 @@ export class CarImageDto {
 
   @ApiProperty({ example: '/uploads/1234.jpg' })
   url!: string;
+
+  @ApiProperty({ type: Boolean, example: false, description: 'true untuk gambar yang dipilih sebagai tampilan list mobil; gambar baru bernilai false' })
+  highlight!: boolean;
 }
 
 export class CarListResponseDto {
@@ -216,7 +221,7 @@ export class CarListResponseDto {
   @ApiProperty({ example: 275000000 })
   price!: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String, nullable: true })
   description?: string | null;
 
   @ApiProperty({ type: [CarImageDto] })
