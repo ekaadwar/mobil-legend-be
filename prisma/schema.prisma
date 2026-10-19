@@ -40,7 +40,9 @@ model CarImage {
   carId     String   @map("car_id") @db.Uuid
   filename  String   @db.VarChar(255)
   url       String   @db.VarChar(500)
+  highlight Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+  
   car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
 
   @@index([carId])

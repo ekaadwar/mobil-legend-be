@@ -7,6 +7,7 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  CarImageDto,
   CarListResponseDto,
   CarResponseDto,
   CarStatus,
@@ -17,30 +18,7 @@ import {
 } from './dto/car.dto';
 import { Prisma } from '@prisma/client';
 
-interface CarImageRecord {
-  id: string;
-  filename: string;
-  url: string;
-}
-
-interface CarWithImages {
-  id: string;
-  name: string;
-  manufacturer: string;
-  year: number;
-  price: bigint;
-  color: string | null;
-  description: string | null;
-  status: string | null;
-  transmission: string | null;
-  mileage: number | null;
-  fuel: string | null;
-  registrationNumber: string | null;
-  validityPeriod: Date | null;
-  showroomName: string | null;
-  showroomAddress: string | null;
-  images: CarImageRecord[];
-}
+type CarWithImages = Prisma.CarGetPayload<{ include: { images: true } }>;
 
 @Injectable()
 export class CarsService {
@@ -171,6 +149,33 @@ export class CarsService {
     }
   }
 
+  async highlightImage(id: string): Promise<CarImageDto> {
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const image = await transaction.carImage.findUnique({ where: { id } });
+        if (!image) throw new NotFoundException('Gambar mobil tidak ditemukan');
+
+        await transaction.$queryRaw`
+          SELECT "id" FROM "cars" WHERE "id" = ${image.carId}::uuid FOR UPDATE
+        `;
+        await transaction.carImage.updateMany({
+          where: { carId: image.carId, id: { not: id } },
+          data: { highlight: false },
+        });
+        return transaction.carImage.update({
+          where: { id },
+          data: { highlight: true },
+          select: { id: true, url: true, highlight: true },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Gambar mobil tidak ditemukan');
+      }
+      throw error;
+    }
+  }
+
   async delete(id: string): Promise<void> {
     const existing = await this.findEntity(id);
     await this.prisma.car.delete({ where: { id } });
@@ -251,7 +256,7 @@ export class CarsService {
       transmission: car.transmission,
       mileage: car.mileage,
       validity_period: car.validityPeriod?.toISOString().slice(0, 10) ?? null,
-      images: car.images.map(({ id, url }) => ({ id, url })),
+      images: car.images.map(({ id, url, highlight }) => ({ id, url, highlight })),
     };
   }
 

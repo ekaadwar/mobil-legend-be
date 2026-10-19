@@ -1,14 +1,19 @@
+/// <reference types="jest" />
+
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { JwtModule, JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import request = require('supertest');
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseBulkCars } from './car-upload';
 import { CarsController } from './cars.controller';
+import { CarImagesController } from './car-images.controller';
 import { CarsService } from './cars.service';
 import { CarStatus, CarsQueryDto, UpdateCarDto } from './dto/car.dto';
 
@@ -21,6 +26,7 @@ const baseInput = {
 
 const additionalInput = {
   status: CarStatus.READY,
+  color: 'Silver Metallic',
   transmission: 'Automatic',
   mileage: 45000,
   fuel: 'Bensin',
@@ -36,6 +42,7 @@ const record = {
   price: BigInt(baseInput.price),
   description: null,
   status: additionalInput.status,
+  color: additionalInput.color,
   transmission: additionalInput.transmission,
   mileage: additionalInput.mileage,
   fuel: additionalInput.fuel,
@@ -43,8 +50,115 @@ const record = {
   validityPeriod: new Date('2028-02-29T00:00:00.000Z'),
   showroomName: additionalInput.showroom_name,
   showroomAddress: additionalInput.showroom_address,
+  createdAt: new Date('2026-10-13T00:00:00.000Z'),
+  updatedAt: new Date('2026-10-13T00:00:00.000Z'),
   images: [],
-};
+} satisfies Prisma.CarGetPayload<{ include: { images: true } }>;
+
+describe('Car image highlight endpoint', () => {
+  let app: INestApplication;
+  let authorization: string;
+  const image = {
+    id: 'edb94b14-c065-4b82-a8bf-a8294971bbbd',
+    carId: record.id,
+    url: '/uploads/highlight.jpg',
+    highlight: false,
+  };
+  const transaction = {
+    carImage: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+    $queryRaw: jest.fn(),
+  };
+  const prisma = { $transaction: jest.fn() };
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      imports: [JwtModule.register({ secret: 'highlight-test-only-secret' })],
+      controllers: [CarImagesController],
+      providers: [CarsService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    app = module.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    authorization = `Bearer ${app.get(JwtService).sign({ sub: 'admin' })}`;
+  });
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((operation) => operation(transaction));
+    transaction.carImage.findUnique.mockResolvedValue(image);
+    transaction.$queryRaw.mockResolvedValue([{ id: image.carId }]);
+    transaction.carImage.updateMany.mockResolvedValue({ count: 2 });
+    transaction.carImage.update.mockResolvedValue({ id: image.id, url: image.url, highlight: true });
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  it('selects one image and clears siblings in a single locked transaction without a body', async () => {
+    const response = await request(app.getHttpServer()).patch(`/api/v1/car-images/${image.id}`)
+      .set('Authorization', authorization).expect(200);
+    expect(response.body).toEqual({ id: image.id, url: image.url, highlight: true });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(transaction.carImage.findUnique).toHaveBeenCalledWith({ where: { id: image.id } });
+    expect(transaction.$queryRaw.mock.calls[0][0].join('?')).toContain('FOR UPDATE');
+    expect(transaction.$queryRaw.mock.calls[0][1]).toBe(image.carId);
+    expect(transaction.carImage.updateMany).toHaveBeenCalledWith({
+      where: { carId: image.carId, id: { not: image.id } }, data: { highlight: false },
+    });
+    expect(transaction.carImage.update).toHaveBeenCalledWith({
+      where: { id: image.id }, data: { highlight: true }, select: { id: true, url: true, highlight: true },
+    });
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0])
+      .toBeLessThan(transaction.carImage.updateMany.mock.invocationCallOrder[0]);
+  });
+
+  it('returns 404 without mutating other images when the ID is missing', async () => {
+    transaction.carImage.findUnique.mockResolvedValue(null);
+    const response = await request(app.getHttpServer()).patch(`/api/v1/car-images/${image.id}`)
+      .set('Authorization', authorization).expect(404);
+    expect(response.body).toMatchObject({ statusCode: 404, message: 'Gambar mobil tidak ditemukan' });
+    expect(transaction.carImage.updateMany).not.toHaveBeenCalled();
+    expect(transaction.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed UUID before accessing the database', async () => {
+    await request(app.getHttpServer()).patch('/api/v1/car-images/not-a-uuid')
+      .set('Authorization', authorization).expect(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'Bearer invalid'])('requires a valid token (%p)', async (token) => {
+    const patch = request(app.getHttpServer()).patch(`/api/v1/car-images/${image.id}`);
+    if (token) patch.set('Authorization', token);
+    await patch.expect(401);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('propagates write failures so the transaction rolls back', async () => {
+    transaction.carImage.update.mockRejectedValue(new Error('write failed'));
+    await expect(app.get(CarsService).highlightImage(image.id)).rejects.toThrow('write failed');
+  });
+
+  it('returns 404 if the selected image is deleted during the operation', async () => {
+    transaction.carImage.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError(
+      'Record not found', { code: 'P2025', clientVersion: '6.12.0' },
+    ));
+    await request(app.getHttpServer()).patch(`/api/v1/car-images/${image.id}`)
+      .set('Authorization', authorization).expect(404);
+  });
+
+  it('documents the protected endpoint and its image response', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().addBearerAuth().build());
+    const operation = document.paths['/api/v1/car-images/{id}'].patch;
+    expect(operation?.security).toEqual([{ bearer: [] }]);
+    expect(operation?.requestBody).toBeUndefined();
+    expect(document.components?.schemas?.CarImageDto).toMatchObject({
+      properties: { highlight: { type: 'boolean' } },
+    });
+    expect(operation?.responses['200']).toMatchObject({
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/CarImageDto' } } },
+    });
+  });
+});
 
 describe('Car list Swagger parameters', () => {
   it('documents pagination as scalar integers instead of JSON objects', async () => {
@@ -61,6 +175,15 @@ describe('Car list Swagger parameters', () => {
       await app.init();
       const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
       const parameters = document.paths['/api/v1/cars'].get?.parameters;
+      for (const schemaName of ['CarListResponseDto', 'CarResponseDto']) {
+        expect(document.components?.schemas?.[schemaName]).toMatchObject({
+          properties: {
+            images: { type: 'array', items: { $ref: '#/components/schemas/CarImageDto' } },
+            color: { type: 'string', nullable: true },
+            description: { type: 'string', nullable: true },
+          },
+        });
+      }
       expect(parameters).toEqual(expect.arrayContaining([
         expect.objectContaining({ name: 'page', in: 'query', required: false,
           schema: expect.objectContaining({ type: 'integer', default: 1, minimum: 1 }) }),
@@ -82,6 +205,7 @@ describe('Car PATCH optional image fields', () => {
     id: 'edb94b14-c065-4b82-a8bf-a8294971bbbd',
     filename: 'existing-car-image.jpg',
     url: '/uploads/existing-car-image.jpg',
+    highlight: false,
   };
   const prisma = { car: { findUnique: jest.fn(), update: jest.fn() } };
 
@@ -117,7 +241,7 @@ describe('Car PATCH optional image fields', () => {
     }
     const response = await patch.expect(200);
     expect(response.body.status).toBe('sold');
-    expect(response.body.images).toEqual([{ id: image.id, url: image.url }]);
+    expect(response.body.images).toEqual([{ id: image.id, url: image.url, highlight: false }]);
     const data = prisma.car.update.mock.calls[0][0].data;
     expect(data.images).toEqual({ deleteMany: { id: { in: [] } }, create: [] });
     expect(data).not.toHaveProperty('removeImageIds');
@@ -178,6 +302,9 @@ describe('Car additional input validation', () => {
 
   it.each([
     { status: 'available' },
+    { color: 'x'.repeat(101) },
+    { color: 123 },
+    { highlight: true },
     { mileage: -1 },
     { mileage: 1.5 },
     { mileage: 2147483648 },
@@ -194,7 +321,9 @@ describe('Car additional input validation', () => {
     { showroom_address: 123 },
   ])('rejects invalid bulk and PATCH input %p', async (fields) => {
     await expect(parseBulkCars(JSON.stringify([{ ...baseInput, ...fields }]))).rejects.toThrow();
-    expect((await validate(plainToInstance(UpdateCarDto, fields))).length).toBeGreaterThan(0);
+    expect((await validate(plainToInstance(UpdateCarDto, fields), {
+      whitelist: true, forbidNonWhitelisted: true,
+    })).length).toBeGreaterThan(0);
   });
 });
 
@@ -221,6 +350,31 @@ describe('Car storage and response mapping', () => {
     prisma.$transaction.mockImplementation(async (operation) =>
       typeof operation === 'function' ? operation(prisma) : Promise.all(operation),
     );
+  });
+
+  it('uses the same image response shape in list, detail, bulk and car update without filtering images', async () => {
+    const images = [true, false].map((highlight, index) => ({
+      id: `image-${index}`,
+      carId: record.id,
+      filename: `image-${index}.jpg`,
+      url: `/uploads/image-${index}.jpg`,
+      highlight,
+      createdAt: record.createdAt,
+    }));
+    const withImages = { ...record, images };
+    prisma.car.findMany.mockResolvedValue([withImages]);
+    prisma.car.findUnique.mockResolvedValue(withImages);
+    prisma.car.create.mockResolvedValue(withImages);
+    prisma.car.update.mockResolvedValue(withImages);
+    const page = await service.findAll(new CarsQueryDto());
+    const detail = await service.findOne(record.id);
+    const created = await service.createMany([{ ...baseInput, ...additionalInput }]);
+    const updated = await service.update(record.id, { color: null });
+    const expected = images.map(({ id, url, highlight }) => ({ id, url, highlight }));
+    for (const car of [page.data[0], detail, created[0], updated]) {
+      expect(car.images).toEqual(expected);
+    }
+    expect(prisma.car.update.mock.calls[0][0].data.color).toBeNull();
   });
 
   it('adds only the four requested fields to list items', async () => {
@@ -270,7 +424,7 @@ describe('Car storage and response mapping', () => {
     const fields = Object.fromEntries(Object.keys(additionalInput).map((field) => [field, null]));
     await service.update(record.id, fields);
     expect(prisma.car.update.mock.calls[0][0].data).toMatchObject({
-      status: null, transmission: null, mileage: null, fuel: null,
+      status: null, color: null, transmission: null, mileage: null, fuel: null,
       registrationNumber: null, validityPeriod: null, showroomName: null, showroomAddress: null,
     });
   });
@@ -278,7 +432,7 @@ describe('Car storage and response mapping', () => {
   it('serializes nullable records without dropping fields', async () => {
     prisma.car.findUnique.mockResolvedValue({
       ...record,
-      status: null, transmission: null, mileage: null, fuel: null,
+      status: null, color: null, transmission: null, mileage: null, fuel: null,
       registrationNumber: null, validityPeriod: null, showroomName: null, showroomAddress: null,
     });
     const detail = await service.findOne(record.id);

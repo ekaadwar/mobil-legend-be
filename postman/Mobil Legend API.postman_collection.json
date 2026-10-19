@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6c496e77-229a-46ec-a293-1030bce8d7e3",
     "name": "Mobil Legend API",
-    "description": "Koleksi API katalog mobil bekas Mobil Legend. Field status, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address bersifat opsional dan nullable. Status: ready, pending, reserve, sold. Mileage: integer kilometer 0-2147483647. Validity_period: tanggal YYYY-MM-DD. Bulk menerima null JSON; PATCH form-data menerima teks null atau string kosong untuk mengosongkan field. Field yang tidak dikirim pada PATCH tidak berubah.",
+    "description": "Koleksi API katalog mobil bekas Mobil Legend. Field status, color, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address bersifat opsional dan nullable. Status: ready, pending, reserve, sold. Color maksimal 100 karakter. Mileage: integer kilometer 0-2147483647. Validity_period: tanggal YYYY-MM-DD. Bulk menerima null JSON; PATCH form-data menerima teks null atau string kosong untuk mengosongkan field. Field yang tidak dikirim pada PATCH tidak berubah. Semua response gambar berbentuk {id,url,highlight}; pilih gambar list dengan highlight=true melalui PATCH car-images/{id} tanpa body.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -12,7 +12,8 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
     { "key": "accessToken", "value": "" },
-    { "key": "carId", "value": "" }
+    { "key": "carId", "value": "" },
+    { "key": "carImageId", "value": "" }
   ],
   "item": [
     {
@@ -71,12 +72,14 @@
               "  pm.response.json().data.forEach(car => {",
               "    ['status', 'transmission', 'mileage', 'validity_period'].forEach(field => pm.expect(car).to.have.property(field));",
               "    ['fuel', 'registration_number', 'showroom_name', 'showroom_address'].forEach(field => pm.expect(car).not.to.have.property(field));",
+              "    car.images.forEach(image => pm.expect(image.highlight).to.be.a('boolean'));",
+              "    pm.expect(car.images.filter(image => image.highlight).length).to.be.at.most(1);",
               "  });",
               "});"
             ] }
           }],
           "request": {
-            "description": "Response pagination tetap memiliki data, page, perpage, total, totalPages. Setiap mobil menambahkan status, transmission, mileage (km), validity_period (YYYY-MM-DD); semua dapat bernilai null. Field fuel, registration_number, showroom_name, showroom_address hanya tersedia pada detail dan response tulis.",
+            "description": "Response pagination tetap memiliki data, page, perpage, total, totalPages. Setiap mobil memiliki status, color, transmission, mileage (km), validity_period (YYYY-MM-DD); semua dapat bernilai null. Seluruh gambar tetap dikembalikan dalam images berupa {id,url,highlight}. Frontend memilih images.find(image => image.highlight); jika belum ada pilihan, tampilkan placeholder. Field fuel, registration_number, showroom_name, showroom_address hanya tersedia pada detail dan response tulis.",
             "method": "GET",
             "header": [],
             "url": {
@@ -98,14 +101,18 @@
             "listen": "test",
             "script": { "exec": [
               "pm.test('Detail mobil berhasil', () => pm.response.to.have.status(200));",
-              "pm.test('Response detail memiliki delapan field tambahan', () => {",
+              "if (pm.response.code === 200) pm.collectionVariables.set('carImageId', pm.response.json().images?.[0]?.id || '');",
+              "pm.test('Response detail memiliki field tambahan dan highlight', () => {",
               "  const car = pm.response.json();",
-              "  ['status', 'transmission', 'mileage', 'fuel', 'registration_number', 'validity_period', 'showroom_name', 'showroom_address'].forEach(field => pm.expect(car).to.have.property(field));",
+              "  ['status', 'color', 'transmission', 'mileage', 'fuel', 'registration_number', 'validity_period', 'showroom_name', 'showroom_address'].forEach(field => pm.expect(car).to.have.property(field));",
+              "  car.images.forEach(image => pm.expect(image).to.have.all.keys('id', 'url', 'highlight'));",
+              "  car.images.forEach(image => pm.expect(image.highlight).to.be.a('boolean'));",
+              "  pm.expect(car.images.filter(image => image.highlight).length).to.be.at.most(1);",
               "});"
             ] }
           }],
           "request": { 
-            "description": "Response detail menambahkan status, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address. Semua nullable. Tanggal berformat YYYY-MM-DD, mileage dalam kilometer.",
+            "description": "Response detail menambahkan status, color, transmission, mileage, fuel, registration_number, validity_period, showroom_name, showroom_address. Semua nullable. Tanggal berformat YYYY-MM-DD, mileage dalam kilometer. Setiap gambar berbentuk {id,url,highlight}. Ambil ulang detail setelah PATCH highlight untuk melihat pilihan terbaru.",
             "method": "GET", 
             "header": [], 
             "url": { 
@@ -122,11 +129,12 @@
             "script": { "exec": [
               "pm.test('Mobil dibuat', () => pm.response.to.have.status(201));",
               "const body = pm.response.json();",
-              "if (body[0]) pm.collectionVariables.set('carId', body[0].id);"
+              "if (body[0]) pm.collectionVariables.set('carId', body[0].id);",
+              "if (pm.response.code === 201) pm.collectionVariables.set('carImageId', body[0]?.images?.[0]?.id || '');"
             ] }
           }],
           "request": {
-            "description": "Field cars adalah string array JSON berisi 1-20 mobil. Semua delapan field tambahan opsional dan menerima null; jika tidak diisi disimpan null, termasuk status (tanpa default). Status: ready|pending|reserve|sold. Mileage integer 0-2147483647 km. Validity_period YYYY-MM-DD. Batas panjang: transmission/fuel 100, registration_number 30, showroom_name 150 karakter. Response berisi array detail mobil termasuk semua field tambahan.",
+            "description": "Field cars adalah string array JSON berisi 1-20 mobil. Field tambahan termasuk color opsional dan menerima null; jika tidak diisi disimpan null, termasuk status (tanpa default). Status: ready|pending|reserve|sold. Mileage integer 0-2147483647 km. Validity_period YYYY-MM-DD. Batas panjang: color/transmission/fuel 100, registration_number 30, showroom_name 150 karakter. Response berisi array detail mobil. Gambar baru berbentuk {id,url,highlight:false}; pemilihan highlight dilakukan melalui endpoint khusus.",
             "method": "POST",
             "header": [],
             "body": { "mode": "formdata", "formdata": [
@@ -139,12 +147,13 @@
         {
           "name": "Update Car",
           "request": {
-            "description": "Semua field opsional. Delapan field tambahan menerima teks null atau string kosong untuk menghapus nilainya; nonaktifkan/hilangkan field agar nilainya tidak berubah. Status ready|pending|reserve|sold; mileage integer 0-2147483647 km; validity_period YYYY-MM-DD. Response adalah detail mobil termasuk semua field tambahan.",
+            "description": "Semua field opsional. Field tambahan termasuk color menerima teks null atau string kosong untuk menghapus nilainya; nonaktifkan/hilangkan field agar nilainya tidak berubah. Status ready|pending|reserve|sold; mileage integer 0-2147483647 km; validity_period YYYY-MM-DD. Response adalah detail mobil. Update tanpa perubahan gambar mempertahankan highlight; upload tambahan bernilai highlight=false. Menghapus gambar highlight tidak otomatis memilih pengganti.",
             "method": "PATCH", "header": [],
             "body": { "mode": "formdata", "formdata": [
               { "key": "name", "value": "Avanza Veloz Q", "type": "text" },
               { "key": "price", "value": "290000000", "type": "text" },
               { "key": "status", "value": "pending", "type": "text" },
+              { "key": "color", "value": "Silver Metallic", "type": "text", "disabled": true },
               { "key": "transmission", "value": "Automatic", "type": "text" },
               { "key": "mileage", "value": "46000", "type": "text" },
               { "key": "fuel", "value": "Bensin", "type": "text" },
@@ -156,6 +165,44 @@
               { "key": "images", "type": "file", "src": [], "disabled": true }
             ] },
             "url": { "raw": "{{baseUrl}}/cars/{{carId}}", "host": ["{{baseUrl}}"], "path": ["cars", "{{carId}}"] }
+          }
+        },
+        {
+          "name": "Highlight Car Image",
+          "response": [{
+            "name": "200 - Gambar highlight terpilih",
+            "originalRequest": {
+              "method": "PATCH",
+              "header": [],
+              "url": "{{baseUrl}}/car-images/{{carImageId}}"
+            },
+            "status": "OK",
+            "code": 200,
+            "_postman_previewlanguage": "json",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": "{\n  \"id\": \"edb94b14-c065-4b82-a8bf-a8294971bbbd\",\n  \"url\": \"/uploads/gambar-mobil.jpg\",\n  \"highlight\": true\n}"
+          }],
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Highlight berhasil', () => pm.response.to.have.status(200));",
+              "pm.test('Response gambar terpilih', () => {",
+              "  const image = pm.response.json();",
+              "  pm.expect(image.id).to.eql(pm.collectionVariables.get('carImageId'));",
+              "  pm.expect(image.url).to.be.a('string');",
+              "  pm.expect(image.highlight).to.eql(true);",
+              "});"
+            ] }
+          }],
+          "request": {
+            "description": "Tanpa body. Gunakan carImageId (UUID gambar, bukan UUID mobil) dari response Add Cars atau Get Car Detail. Gambar terpilih menjadi highlight=true dan gambar lain untuk mobil yang sama menjadi false dalam satu transaksi. Gambar mobil lain tidak berubah. Memerlukan bearer token; 400 untuk UUID salah, 401 untuk token tidak valid, 404 untuk gambar tidak ditemukan. Response 200: {id, url, highlight:true}. GET detail menampilkan highlight pada setiap gambar.",
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/car-images/{{carImageId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["car-images", "{{carImageId}}"]
+            }
           }
         },
         {
